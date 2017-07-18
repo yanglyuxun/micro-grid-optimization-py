@@ -8,12 +8,13 @@ Created on Wed Jul 12 15:53:39 2017
 import os
 import pandas as pd
 import numpy as np
-# import datetime as dt
+import datetime
 import time
 #import random
 import xgboost as xgb
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
+import matplotlib.pyplot as plt
 
 def zero_to_na(df):
     """
@@ -40,32 +41,14 @@ def addtime(df):
     df.loc[:,"minute"] = [x.minute for x in df.index]
     return(df)
 
-def addlag_split(df, step_range, testdate): # step_range = range(96,96*22)
-    """
-    Add lag vars in the data and split it into train set and test set
-    """
-    #n = step_range[-1]
-    colnames = df.columns.to_native_types()
-    colnames[0] = "outy"
-    df.columns = colnames
-    MCdfselect = pd.get_dummies(df, columns=["day","weekdays","hour","minute"])
-    dflist = [MCdfselect]
-    for i in step_range:
-        dflist.append(MCdfselect.outy.shift(i).rename("lag" + str(i)))
-    MCdfselect = pd.concat(dflist,axis=1)
-    MCdfselect = MCdfselect.dropna().sort_index()
-    traindf = MCdfselect.iloc[:-1]
-    testdf = MCdfselect.iloc[[-1]]
-    x = traindf.drop(["outy"],axis=1)
-    y = traindf.outy
-    xtest = testdf.drop(["outy"],axis=1)
-    ytest = testdf.outy
-    return x,y,xtest,ytest
+
 
 def Err(prediction, truevalue):
     '''
     calculate the RMSE, MAPE for some prediction
     '''
+    prediction = np.array(prediction)
+    truevalue = np.array(truevalue)
     RMSE = np.sqrt(((prediction - truevalue)**2).mean())
     n0s = sum(truevalue == 0)
     if n0s>0:
@@ -170,14 +153,63 @@ def select_1d(dfin,df):
     dfinnew = dfin[in1].loc[dfin[in1].index.date==choi, ['in']].copy()
     return dfinnew,dfnew,choi1
 
-def predict_a_point(df,datet): # unknow if it is right! focus on the index of the result
+def addlag_split(df, step_range, testdate, varns,ntrainmax=6000): # step_range = range(96,96*22)
+    """
+    Add lag vars in the data and split it into train set and test set
+    """
+    #n = step_range[-1]
+    colnames = df.columns.to_native_types()
+    colnames[0] = "outy"
+    df.columns = colnames
+    MCdfselect = pd.get_dummies(df, columns=["day","weekdays","hour","minute"])
+    dflist = [MCdfselect]
+    for i in step_range:
+        if i in varns:
+            dflist.append(MCdfselect.outy.shift(i).rename("lag" + str(i)))
+    MCdfselect = pd.concat(dflist,axis=1)
+    MCdfselect = MCdfselect.dropna().sort_index()
+    testind = MCdfselect.index.date == testdate
+    traindf = MCdfselect.loc[~testind]
+    testdf = MCdfselect.loc[testind]
+    x = traindf.drop(["outy"],axis=1)
+    y = traindf.outy
+    xtest = testdf.drop(["outy"],axis=1)
+    ytest = testdf.outy
+#    x.values.astype('float')
+#    y.values.astype('float')
+#    xtest.values.astype('float')
+#    ytest.values.astype('float')
+    return x.iloc[-ntrainmax:],y.iloc[-ntrainmax:],xtest,ytest
+
+def predict_a_point(df,datet,varns): 
     date0 = datet.date()
     dfnew = df.loc[(df.index.date!=date0) | (df.index==datet)]
     step0 = int((dfnew.index[-1]-dfnew.index[-2]) / (dfnew.index[-2]-dfnew.index[-3]))
     #print(step0)
-    x,y,xtest,ytest = addlag_split(addtime(df), range(step0,96*22+step0), date0)
-    x.values.astype('float')
-    y.values.astype('float')
+    x,y,xtest,ytest = addlag_split(addtime(df), range(step0,96*22+step0), date0, varns)
+    dtrain = xgb.DMatrix(x, label=y)
+    dtest = xgb.DMatrix(xtest.loc[[datet]], label=ytest.loc[[datet]])
+    time0 = time.time()####
+    bst = xgb.train({'max_depth':3, 'eta':0.3,
+                     'booster':'gbtree'},
+                    dtrain, 20)
+    result = bst.predict(dtest, ntree_limit=bst.best_iteration)
+    use_time = time.time() - time0####
+    return result[0],use_time
+def predict_a_day(df,date,varns):
+    'predict point by point! More precise'
+    prediction = df.loc[df.index.date==date].copy()
+    time0 = 0
+    for d in df.index[df.index.date==date]:
+        prediction.loc[d], time1 = predict_a_point(df,d,varns)
+        time0 += time1
+        print(d)
+    return prediction,time0
+
+def predict_96_points(df,varns): #### error is too large????????
+    'predict together!'
+    date0 = df.index[-1].date()
+    x,y,xtest,ytest = addlag_split(addtime(df), range(96*1,96*22), date0,varns)
     dtrain = xgb.DMatrix(x, label=y)
     dtest = xgb.DMatrix(xtest, label=ytest)
     time0 = time.time()####
@@ -188,27 +220,40 @@ def predict_a_point(df,datet): # unknow if it is right! focus on the index of th
     use_time = time.time() - time0####
     return result,use_time
 
-def predict_96_points(df): #### not right! index not right!!!
-    date0 = df.index[-1].date()
-    x,y,xtest,ytest = addlag_split(addtime(df), range(96*1,96*22), date0)
-    x.values.astype('float')
-    y.values.astype('float')
-    dtrain = xgb.DMatrix(x, label=y)
-    dtest = xgb.DMatrix(xtest, label=ytest)
-    time0 = time.time()####
-    bst = xgb.train({'max_depth':3, 'eta':0.3,
-                     'booster':'gbtree'},
-                    dtrain, 20)
-    result = bst.predict(dtest, ntree_limit=bst.best_iteration)
-    use_time = time.time() - time0####
-    return x,y,xtest,ytest,result,use_time
-    
-def MC_select_and_exp(dfin,df):
+def MC_compare_2_prediction(dfin,df,varns,rep=30,plot=4):
+    'compare the 2 prediction methods'
+    seperate = {'err':[],'time':[]}
+    together = {'err':[],'time':[]}
+    for i in range(rep):
+        iny,outyall,outdate = select_1d(dfin,df)
+        pred,time0 = predict_a_day(outyall,outdate,varns)
+        seperate['err'].append(Err(pred,outyall.loc[outyall.index.date==outdate])[1])
+        seperate['time'].append(time0)
+        if plot>0:
+            plt.figure()
+            plt.plot(outyall.loc[outyall.index.date==outdate],'-b')
+            plt.plot(pred,':r')
+            plt.title('Seperate '+str(outdate))
+        pred,time0 = predict_96_points(outyall,varns)#[-2:]
+        together['err'].append(Err(pred,outyall.loc[outyall.index.date==outdate].T.as_matrix()[0])[1])
+        together['time'].append(time0)
+        if plot>0:
+            plt.figure()
+            plt.plot(outyall.loc[outyall.index.date==outdate].T.as_matrix()[0],'-b')
+            plt.plot(pred,':r')
+            plt.title('Together '+str(outdate))
+            plot-=1
+        print((i+1)/rep)
+    return pd.DataFrame({'sep_Err':seperate['err'],'tog_Err':together['err'],
+                         'sep_t':seperate['time'],'tog_t':together['time']})
+
+
+def MC_select_and_exp(dfin,df,varns):
     print('Making data...')
     iny,outyall,outdate = select_1d(dfin,df)
     print('Data preprocessing...')
     #addlag_split(outyall, step_range, outdate)
-    
+    temp = predict_96_points(outyall,varns)
     
     
     

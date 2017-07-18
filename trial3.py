@@ -49,6 +49,8 @@ dfin = read_all_data('./Data/')
 
 # These are the important variables --> to the lag numbers
 with open('vars.txt') as f:
-    varnames = [int(i.strip().replace('lag','')) for i in f.readlines()]
+    varns = [int(i.strip().replace('lag','')) for i in f.readlines()]
+
+MC_compare_result = MC_compare_2_prediction(dfin,df,varns,rep=30)
 
 # PSO and find
