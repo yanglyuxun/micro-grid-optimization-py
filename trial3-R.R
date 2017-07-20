@@ -5,7 +5,8 @@ library(pso)
 ## PSO -----------------
 
 # 适应度函数（越小越好） - output is the cost+punish
-evaluate = function(Batrate){
+# 德国模式：完全不允许电池、电网交互---------------
+evaluate1 = function(Batrate){
   # 检查长度
   #if(length(Batrate)!=nx){message("Length Error!");return(NA)}
   # 计算Bat,sell
@@ -26,8 +27,28 @@ evaluate = function(Batrate){
       pun
   )
 }
-# given Bat, iny, outy, calculate the profit:
-calc_profit= function(real_iny, real_outy, batnow){
+PSOsolve1 = function(iny,outy, real_iny, real_outy){
+  PSOresult = list(par=rep(1,nx))
+  subsidy_all <<- sum(real_iny) * subsidy
+  time0 = now()
+  cost=c(evaluate1(rep(0.5,nx)))
+  i = 1 # the n.row of cost
+  while(i<2 || cost[i-1]-cost[i]>no_improvement){
+    PSOresult = psoptim(PSOresult$par,evaluate1,lower = rep(0,nx),upper=rep(1,nx),
+                        control = control)
+    i=i+1
+    cost[i] = evaluate(PSOresult$par)
+  }
+  # calculate the real profit:
+  Bat = (iny - outy) * PSOresult$par
+  Batreal = Bat
+  Batreal[Bat>0] = Bat[Bat>0] * batrateio # 充电效率 
+  batnow = cumsum(Batreal) + 0.8*batmax
+  if(sum((batnow>batmax) + (batnow<0)) >0 ){stop("Error1!")}
+  return(list(time = as.duration(now()-time0), 
+              realProfit = calc_profit1(real_iny,real_outy,batnow)))
+}
+calc_profit1= function(real_iny, real_outy, batnow){
   batnowreal = 0.8 * batmax
   Batreal = rep(NA, nx) 
   for(i in (1:nx)){
@@ -44,10 +65,6 @@ calc_profit= function(real_iny, real_outy, batnow){
   }
   Sellreal = real_iny - real_outy - Batreal
   if(sum(Batreal * Sellreal<0)>0){stop("Error2!")}
-  #plot the bat
-  #plot(batnow,type='l',ylim=c(0,batmax))
-  #lines(cumsum(ifelse(Batreal>0,Batreal*batrateio,Batreal))+0.8*batmax,col='red')
-  
   return(
     sum(ifelse(Sellreal>0, sellp, buyp) * Sellreal) +
       -batdepre * sum(abs(Batreal))+
@@ -55,6 +72,186 @@ calc_profit= function(real_iny, real_outy, batnow){
       ifelse(sum(Batreal)<0, sum(Batreal)*mean(buyp), sum(Batreal)*mean(sellp))
   )
 }
+# 中间模式：允许电网向电池充电，不允许电池向电网卖电----------------
+evaluate2 = function(Batrate_buyb){
+  # 检查长度
+  #if(length(Batrate)!=nx){message("Length Error!");return(NA)}
+  # 计算Bat,sell
+  Batrate = Batrate_buy[1:96]
+  buyb = Batrate_buy[97:192]
+  buybreal = buyb * batrateio
+  Bat = (iny - outy) * Batrate
+  Sell = iny - outy - Bat 
+  Batreal = Bat # true electricity in the battery
+  Batreal[Bat>0] = Bat[Bat>0] * batrateio # 充电效率 
+  # 电池容量约束惩罚
+  batnow = cumsum(Batreal+buybreal) + 0.8*batmax
+  pun = punish * (sum((batnow - batmax)[batnow > batmax]) +
+                    -sum(batnow[batnow < 0]) +
+                    if(0.8*batmax>batnow[nx]){(0.8*batmax-batnow[nx])*nx}else{0}+ #（最后电量保持80%以上)
+                    sum((Bat+buyb - bat15max)[Bat+buyb > bat15max]) + # 电池充放电速率惩罚
+                    sum((bat15min - (Bat+buyb))[(Bat+buyb) < bat15min]))
+  return( # cost = 
+    -sum(ifelse(Sell-buyb>0, sellp, buyp) * (Sell-buyb)) +
+      batdepre * sum(abs(Bat+buyb)) +
+      pun
+  )
+}
+PSOsolve2 = function(iny,outy, real_iny, real_outy){
+  PSOresult = list(par=c(rep(0.5,nx),rep(0,nx)))
+  subsidy_all <<- sum(real_iny) * subsidy
+  time0 = now()
+  cost=c(evaluate2(PSOresult$par))
+  i = 1 # the n.row of cost
+  while(i<2 || cost[i-1]-cost[i]>no_improvement){
+    PSOresult = psoptim(PSOresult$par,evaluate2,
+                        lower = c(rep(0,nx),rep(0,nx)), ####
+                        upper= c(rep(1,nx),rep(bat15max,nx)), ####
+                        control = control)
+    i=i+1
+    cost[i] = evaluate2(PSOresult$par)
+  }
+  # calculate the real profit:
+  batrate = PSOresult$par[1:96]
+  buyb = PSOresult$par[97:192]
+  buybreal = buyb * batrateio
+  Bat = (iny - outy) * batrate
+  Batreal = Bat
+  Batreal[Bat>0] = Bat[Bat>0] * batrateio 
+  batnow = cumsum(Batreal+buybreal) + 0.8*batmax
+  if(sum((batnow>batmax) + (batnow<0)) >0 ){stop("Error1!")}
+  return(list(time = as.duration(now()-time0), 
+              realProfit = calc_profit2(real_iny,real_outy,batnow)))
+}
+calc_profit2= function(real_iny, real_outy, batnow){
+  batnowreal = 0.8 * batmax
+  Batreal = rep(NA, nx) 
+  buyb = rep(NA,nx)
+  for(i in (1:nx)){
+    IO = real_iny[i] - real_outy[i]
+    target = batnow[i] - batnowreal
+    if(IO>=0){
+      if(target>=0){
+        batall =  min(target/batrateio,  (batmax - batnowreal)/batrateio, bat15max)
+        Batreal[i] = min(batall, IO)
+        buyb[i] = batall-Batreal[i]
+      }else{ #target<0
+        Batreal[i] = 0
+        buyb[i] = 0
+      }
+    }else{ #IO<0
+      if(target<=0){
+        Batreal[i] = max(target, IO, (-batnowreal), bat15min)
+        buyb[i] = 0
+      }else{ # target>0
+        Batreal[i] = 0
+        buyb[i] = min(target/batrateio, (batmax - batnowreal)/batrateio, bat15min)
+      }
+    }
+    batall = Batreal[i] + buyb[i]
+    batnowreal = batnowreal + ifelse(batall>0,batall*batrateio, batall)
+  }
+  Sellreal = real_iny - real_outy - Batreal
+  if(sum(Batreal * Sellreal<0)>0){stop("Error2!")}
+  batallall = Batreal+buyb
+  return(
+    sum(ifelse(Sellreal>0, sellp, buyp) * Sellreal) +
+      -batdepre * sum(abs(batallall))+
+      subsidy_all + 
+      ifelse(sum(batallall)<0, sum(batallall)*mean(buyp), sum(batallall)*mean(sellp))
+  )
+}
+# 国内模式：完全运行电网、电池交互-------------
+evaluate3 = function(Batrate_buyb){
+  # 计算Bat,sell
+  Batrate = Batrate_buy[1:96]
+  buyb = Batrate_buy[97:192]
+  buybreal = buyb
+  buybreal[buyb>0] = buyb[buyb>0] * batrateio
+  Bat = (iny - outy) * Batrate
+  Sell = iny - outy - Bat 
+  Batreal = Bat # true electricity in the battery
+  Batreal[Bat>0] = Bat[Bat>0] * batrateio # 充电效率 
+  # 电池容量约束惩罚
+  batnow = cumsum(Batreal+buybreal) + 0.8*batmax
+  pun = punish * (sum((batnow - batmax)[batnow > batmax]) +
+                    -sum(batnow[batnow < 0]) +
+                    if(0.8*batmax>batnow[nx]){(0.8*batmax-batnow[nx])*nx}else{0}+ #（最后电量保持80%以上)
+                    sum((Bat+buyb - bat15max)[Bat+buyb > bat15max]) + # 电池充放电速率惩罚
+                    sum((bat15min - (Bat+buyb))[bat15min>(Bat+buyb) ]))
+  return( # cost = 
+    -sum(ifelse(Sell-buyb>0, sellp, buyp) * (Sell-buyb)) +
+      batdepre * sum(abs(Bat+buyb)) +
+      pun
+  )
+}
+########################## stop here
+PSOsolve3 = function(iny,outy, real_iny, real_outy){
+  PSOresult = list(par=c(rep(0.5,nx),rep(0,nx)))
+  subsidy_all <<- sum(real_iny) * subsidy
+  time0 = now()
+  cost=c(evaluate3(PSOresult$par))
+  i = 1 # the n.row of cost
+  while(i<2 || cost[i-1]-cost[i]>no_improvement){
+    PSOresult = psoptim(PSOresult$par,evaluate3,
+                        lower = c(rep(0,nx),rep(0,nx)), ####
+                        upper= c(rep(1,nx),rep(bat15max,nx)), ####
+                        control = control)
+    i=i+1
+    cost[i] = evaluate3(PSOresult$par)
+  }
+  # calculate the real profit:
+  batrate = PSOresult$par[1:96]
+  buyb = PSOresult$par[97:192]
+  buybreal = buyb * batrateio
+  Bat = (iny - outy) * batrate
+  Batreal = Bat
+  Batreal[Bat>0] = Bat[Bat>0] * batrateio 
+  batnow = cumsum(Batreal+buybreal) + 0.8*batmax
+  if(sum((batnow>batmax) + (batnow<0)) >0 ){stop("Error1!")}
+  return(list(time = as.duration(now()-time0), 
+              realProfit = calc_profit3(real_iny,real_outy,batnow)))
+}
+calc_profit3= function(real_iny, real_outy, batnow){
+  batnowreal = 0.8 * batmax
+  Batreal = rep(NA, nx) 
+  buyb = rep(NA,nx)
+  for(i in (1:nx)){
+    IO = real_iny[i] - real_outy[i]
+    target = batnow[i] - batnowreal
+    if(IO>=0){
+      if(target>=0){
+        batall =  min(target/batrateio,  (batmax - batnowreal)/batrateio, bat15max)
+        Batreal[i] = min(batall, IO)
+        buyb[i] = batall-Batreal[i]
+      }else{ #target<0
+        Batreal[i] = 0
+        buyb[i] = 0
+      }
+    }else{ #IO<0
+      if(target<=0){
+        Batreal[i] = max(target, IO, (-batnowreal), bat15min)
+        buyb[i] = 0
+      }else{ # target>0
+        Batreal[i] = 0
+        buyb[i] = min(target/batrateio, (batmax - batnowreal)/batrateio, bat15min)
+      }
+    }
+    batall = Batreal[i] + buyb[i]
+    batnowreal = batnowreal + ifelse(batall>0,batall*batrateio, batall)
+  }
+  Sellreal = real_iny - real_outy - Batreal
+  if(sum(Batreal * Sellreal<0)>0){stop("Error2!")}
+  batallall = Batreal+buyb
+  return(
+    sum(ifelse(Sellreal>0, sellp, buyp) * Sellreal) +
+      -batdepre * sum(abs(batallall))+
+      subsidy_all + 
+      ifelse(sum(batallall)<0, sum(batallall)*mean(buyp), sum(batallall)*mean(sellp))
+  )
+}
+
+#################
 # calculation for "all bat" strategy:
 calc_profit_all_bat = function(real_iny, real_outy){
   batnowreal = 0.8 * batmax
@@ -86,66 +283,13 @@ calc_profit_no_bat = function(real_iny, real_outy){
   )
 }
 # Solve for a PSO result
-PSOsolve = function(iny,outy, real_iny, real_outy){
-  PSOresult = list(par=rep(1,nx))
-  subsidy_all <<- sum(real_iny) * subsidy
-  time0 = now()
-  cost=c(evaluate(rep(0.5,nx)))
-  i = 1 # the n.row of cost
-  while(i<2 || cost[i-1]-cost[i]>no_improvement){
-    PSOresult = psoptim(PSOresult$par,evaluate,lower = rep(0,nx),upper=rep(1,nx),
-                        control = control)
-    i=i+1
-    cost[i] = evaluate(PSOresult$par)
-  }
-  # calculate the real profit:
-  Bat = (iny - outy) * PSOresult$par
-  Batreal = Bat
-  Batreal[Bat>0] = Bat[Bat>0] * batrateio # 充电效率 
-  batnow = cumsum(Batreal) + 0.8*batmax
-  if(sum((batnow>batmax) + (batnow<0)) >0 ){stop("Error1!")}
-  return(list(time = as.duration(now()-time0), 
-              Bat = Bat,
-              Batreal = Batreal,
-              realProfit = calc_profit(real_iny,real_outy,batnow)))
-}
+# 德国模式：完全不允许电池、电网交互
 
-MCforOpt = function(df = MCdf, tb = MCresult, method = "prediction"){
-  ntimes = nrow(MCresult)
-  for(i in 1:ntimes){
-    real_iny <<- df$iny[df$date==tb$indate[i]]
-    real_outy <<- df$outy[df$date==tb$outdate[i]]
-    iny <<- real_iny
-    if(method=="real"){outy <<- real_outy}else{outy <<- LMpredict(df, tb$outdate[i])}
-    #plot the prediction
-    plot(real_outy,type='l', main='Prediction Effectiveness')
-    lines(outy, col='red')
-    nx <<- length(iny)
-    #print(ggplot(NULL,aes(x=1:96,y=iny))+geom_line(color=2)+geom_line(aes(x=1:96,y=outy),color=3))
-    PSOresult= PSOsolve(iny, outy, real_iny, real_outy)
-    tb$profit[i] = PSOresult$realProfit
-    tb$time[i] = PSOresult$time
-    tb$solution[i] = list(PSOresult$Bat)
-    #print(ggplot(NULL,aes(x=1:96,y=cumsum(tb$solution[[i]])))+geom_line(color=2))
-    # all bat:
-    tb$all_bat[i] = calc_profit_all_bat(real_iny, real_outy)
-    # no bat:
-    tb$no_bat[i] = calc_profit_no_bat(real_iny, real_outy)
-    message("#####################################")
-    message(i/ntimes)
-    message("#####################################")
-  }
-  rm(real_iny,real_outy,iny,outy,subsidy_all,nx,envir = .GlobalEnv)
-  return(tb)
-}
+# 中间模式：允许电网向电池充电，不允许电池向电网卖电
 
-#MCtimes = 20 # how many times the MC will run?
-#daylist = unique(MCdf$date) # the list that you can select from
-#daylist = daylist[50:length(daylist)] # atlist 50 days for training
-#MCresult = tibble(n=1:MCtimes, 
-                  # indate = sample(daylist,MCtimes,replace = T),
-                  # outdate = sample(daylist,MCtimes,replace = T),
-                  # solution=NA, profit=NA, all_bat=NA, no_bat=NA, time=NA)
+# 国内模式：完全运行电网、电池交互
+
+
 # public variables:
 subsidy = 0.42 * (1-0.17) * (1-0.25) # 补贴，减去增值税和所得税
 buy = function(hour){
@@ -174,7 +318,7 @@ real_iny = df$iny
 real_outy = df$outytrue
 nx=length(iny)
 result1 = PSOsolve(iny,outy,real_iny,real_outy)
-outy = real_outy
+outy = real_outy # suppose we know the real data
 result2 = PSOsolve(iny,outy,real_iny,real_outy)
 output = data.frame(time = as.numeric(c(result1$time,result2$time,0,0),'s'), 
            profit= c(result1$realProfit,result2$realProfit,

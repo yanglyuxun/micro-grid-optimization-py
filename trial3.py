@@ -58,5 +58,5 @@ MC_compare_result.describe()
 #find_multi_index(dfin,df,rep=100) # tuning index: 1.9359486770416141
 # (to let sum(iny)~=sum(outy))
 # pso_results=[]
-MC_multi(dfin,df,varns,pso_results,rep=30)
-pd.concat(pso_results[:30]).describe()
+MC_multi(dfin,df,varns,pso_results,rep=3)
+pso_results_stat = pd.concat(pso_results[:30]).describe()
