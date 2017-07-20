@@ -5,6 +5,7 @@ Created on Wed Jul 12 15:53:39 2017
 
 @author:
 """
+#%%
 import os
 import pandas as pd
 import numpy as np
@@ -15,6 +16,7 @@ import xgboost as xgb
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 import matplotlib.pyplot as plt
+#from pyswarm import pso
 
 def zero_to_na(df):
     """
@@ -142,6 +144,7 @@ def drop_dates(df):
     df = df.loc[df.index.date != drl[1]]
     return df
 
+#%% new part
 def select_1d(dfin,df):
     # train data has at least 30 days
     mindate = df.index.min() + pd.Timedelta(days=30)
@@ -196,7 +199,7 @@ def predict_a_point(df,datet,varns):
     result = bst.predict(dtest, ntree_limit=bst.best_iteration)
     use_time = time.time() - time0####
     return result[0],use_time
-def predict_a_day(df,date,varns):
+def predict_a_day(df,date,varns): #seperately!
     'predict point by point! More precise'
     prediction = df.loc[df.index.date==date].copy()
     time0 = 0
@@ -206,7 +209,7 @@ def predict_a_day(df,date,varns):
         print(d)
     return prediction,time0
 
-def predict_96_points(df,varns): #### error is too large????????
+def predict_96_points(df,varns): # Together!
     'predict together!'
     date0 = df.index[-1].date()
     x,y,xtest,ytest = addlag_split(addtime(df), range(96*1,96*22), date0,varns)
@@ -219,6 +222,88 @@ def predict_96_points(df,varns): #### error is too large????????
     result = bst.predict(dtest, ntree_limit=bst.best_iteration)
     use_time = time.time() - time0####
     return result,use_time
+
+
+#%% PSO
+# public variables:
+
+#def buy(hour):
+#    '上海市电网夏季销售电价表（单一制分时电价用户）工商业及其他用电 http://www.sgcc.com.cn/dlfw/djzc/'
+#    return np.where((hour>=6) & (hour<22), 1.044,0.513)
+#
+#paras = {}
+#subsidy = 0.42 * (1-0.17) * (1-0.25) # 补贴，减去增值税和所得税
+#buyp = buy(df.index[:96].hour)
+#sellp = np.array(0.85-subsidy).repeat(96) # minus subsidy because it always exists
+#batmax = 10000 # 电池容量(kwh)
+#punish = 1e10 # 过量惩罚系数
+#bat15min = -0.2 * batmax /4 # 过量惩罚系数
+#bat15max = 0.2 * batmax /4 # 每15分钟最大充电/放电值: 每小时充放电容量不能超过其最大容量的 20%
+#batdepre = 0.1# 电池折旧成本／（kW·h）
+#batrateio = 0.8 # 电池充放电效率
+#no_improvement = 2 # how much profit increase is condidered to be no improvement
+##'control' : list(maxit = 3000, trace=T, REPORT=500) # the control for psoptim()
+#iny = iny.T.as_matrix()[0][:96]
+#outy = outytrue.T.as_matrix()[0]
+#
+#def evaluate(Batrate):
+#  # 检查长度
+#  #if(length(Batrate)!=nx){message("Length Error!");return(NA)}
+#  # 计算Bat,sell
+#  Bat = (iny - outy) * Batrate
+#  Sell = iny - outy - Bat 
+#  return -np.sum(np.where(Sell>0, sellp, buyp) * Sell) + batdepre * np.sum(np.abs(Bat))
+#
+#
+#def con(Batrate):
+#  Bat = (iny - outy) * Batrate
+#  Sell = iny - outy - Bat 
+#  Batreal = Bat # true electricity in the battery
+#  Batreal[Bat>0] = Bat[Bat>0] * batrateio # 充电效率 
+#  # 电池容量约束惩罚
+#  batnow = np.cumsum(Batreal) + 0.8*batmax
+#  if 0.8*batmax>batnow[-1]:
+#      temp = (0.8*batmax-batnow[-1])*len(batnow)
+#  else:
+#      temp = 0
+#  pun = punish * (np.sum((batnow - batmax)[batnow > batmax]) +
+#                     -np.sum(batnow[batnow < 0]) +
+#                     temp+ #（最后电量保持80%以上)
+#                     np.sum((Bat - bat15max)[Bat > bat15max]) + # 电池充放电速率惩罚
+#                     np.sum((bat15min - Bat)[Bat < bat15min]))
+#  return [-pun]
+#
+#lb = np.zeros(96)
+#ub = np.ones(96)
+#
+#xopt, fopt = pso(evaluate, lb, ub, ieqcons=[], f_ieqcons=con, args=(), kwargs={},
+#    swarmsize=100, omega=0.5, phip=0.5, phig=0.5, maxiter=1000, minstep=1e-8,
+#    minfunc=1e-8, debug=False)
+#
+## Optimum should be around x=[0.5, 0.76] with banana(x)=4.5 and con(x)=0
+
+##%% R - PSO
+## import rpy2's package module
+#import rpy2.robjects.packages as rpackages
+## import R's utility package
+#utils = rpackages.importr('utils')
+## select a mirror for R packages
+#utils.chooseCRANmirror(ind=33) # select the first mirror in the list
+## R package names
+#packnames = ['lubridate','tidyverse','RSNNS','pso']
+## R vector of strings
+#from rpy2.robjects.vectors import StrVector
+## Selectively install what needs to be install.
+## We are fancy, just because we can.
+#names_to_install = [x for x in packnames if not rpackages.isinstalled(x)]
+#if len(names_to_install) > 0:
+#    utils.install_packages(StrVector(names_to_install))
+#
+## source file
+#import rpy2.robjects as robjects
+#robjects.r.source('trial5-fun.R')
+
+#%% MC
 
 def MC_compare_2_prediction(dfin,df,varns,rep=30,plot=4):
     'compare the 2 prediction methods'
@@ -248,12 +333,57 @@ def MC_compare_2_prediction(dfin,df,varns,rep=30,plot=4):
                          'sep_t':seperate['time'],'tog_t':together['time']})
 
 
+    
 def MC_select_and_exp(dfin,df,varns):
     print('Making data...')
-    iny,outyall,outdate = select_1d(dfin,df)
-    print('Data preprocessing...')
-    #addlag_split(outyall, step_range, outdate)
-    temp = predict_96_points(outyall,varns)
-    
-    
-    
+    inyorigin,outyall,outdate = select_1d(dfin,df)
+    iny = outyall.loc[outyall.index.date==outdate].copy() #only get the index
+    for i in iny.index:
+        t1 = np.array([i.hour*60**2+i.minute*60+i.second for i in inyorigin.index.time])
+        t2 = i.hour*60**2+i.minute*60+i.second
+        iny.loc[i].iloc[0] = inyorigin.iloc[np.argmin(np.abs(t1-t2))].values
+    print('Predicting...')
+    pred,time0 = predict_96_points(outyall,varns)
+    outytrue = outyall.loc[outyall.index.date==outdate].copy()
+    outyp = outytrue.copy()
+    outyp.iloc[:] = pred[:,np.newaxis]
+    # tuning the data
+    # iny = iny 
+    print('Output...')
+    output = pd.concat([iny,outyp,outytrue],axis=1)
+    output.columns = ['iny','outyp','outytrue']
+    output.to_csv('out.csv',index=False)
+    print('PSO...') # use R script to do the PSO part
+    if os.path.exists('Routput.csv'):
+        os.remove('Routput.csv')
+    os.system('Rscript ./trial3-R.R')
+    Rout = pd.read_csv('Routput.csv')
+    Rdf = pd.DataFrame({'pre_t':Rout['time'][0],'real_t':Rout['time'][1],
+     'pre_profit':Rout['profit'][0],'real_profit':Rout['profit'][1],
+     'all_bat_p':Rout['profit'][2],'no_bat_p':Rout['profit'][3]},index=[outdate])
+    os.remove('out.csv')
+    os.remove('Routput.csv')
+    return Rdf
+
+def MC_multi(dfin,df,varns,*result,rep=10):
+    for i in range(rep):
+        result[0].append(MC_select_and_exp(dfin,df,varns))
+        print('================================')
+        print(len(result[0]))
+        print('================================')
+
+def find_multi_index(dfin,df,rep=100):
+    sumin=0
+    sumout=0
+    for j in range(rep):
+        inyorigin,outyall,outdate = select_1d(dfin,df)
+        iny = outyall.loc[outyall.index.date==outdate].copy()
+        for i in iny.index:
+            t1 = np.array([i.hour*60**2+i.minute*60+i.second for i in inyorigin.index.time])
+            t2 = i.hour*60**2+i.minute*60+i.second
+            iny.loc[i].iloc[0] = inyorigin.iloc[np.argmin(np.abs(t1-t2))].values
+        outy = outyall.loc[outyall.index.date==outdate].copy()
+        sumin+=np.sum(iny.as_matrix())
+        sumout+=np.sum(outy.as_matrix())
+        print(j)
+    return sumout/sumin

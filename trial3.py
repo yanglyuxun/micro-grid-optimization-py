@@ -52,5 +52,11 @@ with open('vars.txt') as f:
     varns = [int(i.strip().replace('lag','')) for i in f.readlines()]
 
 MC_compare_result = MC_compare_2_prediction(dfin,df,varns,rep=30)
+MC_compare_result.describe()
+# PSO 
 
-# PSO and find
+#find_multi_index(dfin,df,rep=100) # tuning index: 1.9359486770416141
+# (to let sum(iny)~=sum(outy))
+# pso_results=[]
+MC_multi(dfin,df,varns,pso_results,rep=30)
+pd.concat(pso_results[:30]).describe()
