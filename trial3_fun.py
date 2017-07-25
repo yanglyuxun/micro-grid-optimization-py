@@ -399,7 +399,7 @@ def result_stat(rst0):
             rst[i]['pre_profit3'].iloc[0]=rst[i]['pre_profit2'].iloc[0]
         if rst[i]['cut_top2'].iloc[0]>rst[i]['cut_top3'].iloc[0]:
             rst[i]['cut_top3'].iloc[0]=rst[i]['cut_top2'].iloc[0]
-    return pd.concat(rst).describe()
+    return pd.concat(rst).describe().T
 
 
 def find_multi_index(dfin,df,rep=100):
