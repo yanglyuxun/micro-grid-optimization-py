@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import time
+import pickle
 #import random
 import xgboost as xgb
 from sklearn.linear_model import LinearRegression
@@ -358,19 +359,48 @@ def MC_select_and_exp(dfin,df,varns):
         os.remove('Routput.csv')
     os.system('Rscript ./trial3-R.R')
     Rout = pd.read_csv('Routput.csv')
-    Rdf = pd.DataFrame({'pre_t':Rout['time'][0],'real_t':Rout['time'][1],
-     'pre_profit':Rout['profit'][0],'real_profit':Rout['profit'][1],
-     'all_bat_p':Rout['profit'][2],'no_bat_p':Rout['profit'][3]},index=[outdate])
+    Rdf = pd.DataFrame({'pre_t1':Rout['time'][0],
+                        'real_t1':Rout['time'][1],
+                        'pre_t2':Rout['time'][2],
+                        'real_t2':Rout['time'][3],
+                        'pre_t3':Rout['time'][4],
+                        'real_t3':Rout['time'][5],
+                        'pre_profit1':Rout['profit'][0],
+                        'real_profit1':Rout['profit'][1],
+                        'pre_profit2':Rout['profit'][2],
+                        'real_profit2':Rout['profit'][3],
+                        'pre_profit3':Rout['profit'][4],
+                        'real_profit3':Rout['profit'][5],
+                        'all_bat_p':Rout['profit'][6],
+                        'no_bat_p':Rout['profit'][7],
+                        'cut_top2':Rout['profit'][8],
+                        'cut_top3':Rout['profit'][9]},index=[outdate])
     os.remove('out.csv')
     os.remove('Routput.csv')
     return Rdf
 
 def MC_multi(dfin,df,varns,*result,rep=10):
+    print(time.localtime())
     for i in range(rep):
         result[0].append(MC_select_and_exp(dfin,df,varns))
+        with open('./save.pickle','wb') as f:
+            pickle.dump(result[0],f)
         print('================================')
         print(len(result[0]))
+        print(time.localtime())
         print('================================')
+
+def result_stat(rst0):
+    rst = rst0.copy()
+    for i in range(len(rst)):
+        if rst[i]['real_profit2'].iloc[0]>rst[i]['real_profit3'].iloc[0]:
+            rst[i]['real_profit3'].iloc[0]=rst[i]['real_profit2'].iloc[0]
+        if rst[i]['pre_profit2'].iloc[0]>rst[i]['pre_profit3'].iloc[0]:
+            rst[i]['pre_profit3'].iloc[0]=rst[i]['pre_profit2'].iloc[0]
+        if rst[i]['cut_top2'].iloc[0]>rst[i]['cut_top3'].iloc[0]:
+            rst[i]['cut_top3'].iloc[0]=rst[i]['cut_top2'].iloc[0]
+    return pd.concat(rst).describe()
+
 
 def find_multi_index(dfin,df,rep=100):
     sumin=0

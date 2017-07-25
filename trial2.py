@@ -78,8 +78,11 @@ MCexperiment(df, ['xgb','lr'], Result_964, lag_range=range(96*4,96*22))
 table_964 = analyze_result_table(result_table(Result_964))
 
 # get the test_MAPE 
-[i['lr']['test_MAPE']['50%'] for i in [table_1,table_4,table_16,table_ana, table_962,table_964]]
-[i['xgb']['test_MAPE']['50%'] for i in [table_1,table_4,table_16,table_ana, table_962,table_964]]
+[round(i['lr']['test_MAPE']['50%'],5) for i in [table_1,table_4,table_16,table_ana, table_962,table_964]]
+[round(i['xgb']['test_MAPE']['50%'],5) for i in [table_1,table_4,table_16,table_ana, table_962,table_964]]
+# get std
+[round(i['lr']['test_MAPE']['std'],4) for i in [table_1,table_4,table_16,table_ana, table_962,table_964]]
+[round(i['xgb']['test_MAPE']['std'],4) for i in [table_1,table_4,table_16,table_ana, table_962,table_964]]
 
 
 ### analyze the importance

@@ -8,6 +8,7 @@ Created on Wed Jul 12 15:52:25 2017
 """
 import pandas as pd
 import numpy as np
+import pickle
 #import datetime
 #import time
 # import datetime as dt
@@ -58,5 +59,7 @@ MC_compare_result.describe()
 #find_multi_index(dfin,df,rep=100) # tuning index: 1.9359486770416141
 # (to let sum(iny)~=sum(outy))
 # pso_results=[]
-MC_multi(dfin,df,varns,pso_results,rep=3)
-pso_results_stat = pd.concat(pso_results[:30]).describe()
+MC_multi(dfin,df,varns,pso_results,rep=1)
+with open('save.pickle','rb') as f:
+    get_save = pickle.load(f)
+pso_results_stat = result_stat(pso_results)
