@@ -380,15 +380,19 @@ def MC_select_and_exp(dfin,df,varns):
     return Rdf
 
 def MC_multi(dfin,df,varns,*result,rep=10):
-    print(time.localtime())
+    ts = []
     for i in range(rep):
-        result[0].append(MC_select_and_exp(dfin,df,varns))
-        with open('./save.pickle','wb') as f:
-            pickle.dump(result[0],f)
+        t0 = time.time()
         print('================================')
-        print(len(result[0]))
+        print(len(result[0])+1)
         print(time.localtime())
         print('================================')
+        result[0].append(MC_select_and_exp(dfin,df,varns))
+        print('Writing...')
+        with open('./save.pickle','wb') as f:
+            pickle.dump(result[0],f)
+        ts.append((time.time()-t0)/60)
+        print('Finished. Mean time:',np.mean(ts),'min')
 
 def result_stat(rst0):
     rst = rst0.copy()

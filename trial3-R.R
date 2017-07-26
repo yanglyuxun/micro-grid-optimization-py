@@ -112,11 +112,14 @@ PSOsolve2 = function(iny,outy, real_iny, real_outy){
   # calculate the real profit:
   batrate = PSOresult$par[1:96]
   buyb = PSOresult$par[97:192]
-  buybreal = buyb * batrateio
+ # buybreal = buyb * batrateio
   Bat = (iny - outy) * batrate
-  Batreal = Bat
-  Batreal[Bat>0] = Bat[Bat>0] * batrateio 
-  batnow = cumsum(Batreal+buybreal) + 0.4*batmax
+  #Batreal = Bat
+  #Batreal[Bat>0] = Bat[Bat>0] * batrateio 
+  batall = Bat+buyb
+  batallreal = batall
+  batallreal[batall>0] = batall[batall>0] * batrateio
+  batnow = cumsum(batallreal) + 0.4*batmax
   if(sum((batnow>batmax) + (batnow<0)) >0 ){stop("Error1!")}
   return(list(time = as.duration(now()-time0), 
               realProfit = calc_profit2(real_iny,real_outy,batnow,buyb)))
@@ -181,12 +184,15 @@ PSOsolve3 = function(iny,outy, real_iny, real_outy){
   # calculate the real profit:
   batrate = PSOresult$par[1:96]
   buyb = PSOresult$par[97:192]
-  buybreal = buyb
-  buybreal[buyb>0] = buyb[buyb>0] * batrateio
+  #buybreal = buyb
+  #buybreal[buyb>0] = buyb[buyb>0] * batrateio
   Bat = (iny - outy) * batrate
-  Batreal = Bat
-  Batreal[Bat>0] = Bat[Bat>0] * batrateio 
-  batnow = cumsum(Batreal+buybreal) + 0.4*batmax
+  #Batreal = Bat
+  #Batreal[Bat>0] = Bat[Bat>0] * batrateio 
+  batall = Bat+buyb
+  batallreal = batall
+  batallreal[batall>0] = batall[batall>0] * batrateio
+  batnow = cumsum(batallreal) + 0.4*batmax
   if(sum((batnow>batmax) + (batnow<0)) >0 ){stop("Error1!")}
   return(list(time = as.duration(now()-time0), 
               realProfit = calc_profit3(real_iny,real_outy,batnow,buyb)))

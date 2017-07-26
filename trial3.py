@@ -56,7 +56,7 @@ MC_compare_result = MC_compare_2_prediction(dfin,df,varns,rep=30)
 MC_compare_result.describe()
 # PSO 
 
-#find_multi_index(dfin,df,rep=100) # tuning index: 1.9359486770416141
+#find_multi_index(dfin,df,rep=1000) # tuning index: around 1
 # (to let sum(iny)~=sum(outy))
 # pso_results=[]
 MC_multi(dfin,df,varns,pso_results,rep=1000)
