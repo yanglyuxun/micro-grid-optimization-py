@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jul 12 15:53:39 2017
+functions for trial3.py
 
 @author:
 """
@@ -152,9 +152,8 @@ def select_1d(dfin,df):
     choi1 = pd.to_datetime(np.random.choice(df.index[df.index>mindate])).date()
     choi2 = np.random.choice(df.columns)
     dfnew = df.loc[df.index.date<=choi1, [choi2]].copy()
-    in1 = np.random.randint(0,len(dfin))
-    choi = pd.to_datetime(np.random.choice(dfin[in1].index)).date()
-    dfinnew = dfin[in1].loc[dfin[in1].index.date==choi, ['in']].copy()
+    choi = pd.to_datetime(np.random.choice(dfin.index)).date()
+    dfinnew = dfin.loc[dfin.index.date==choi, ['in']].copy()
     return dfinnew,dfnew,choi1
 
 def addlag_split(df, step_range, testdate, varns,ntrainmax=6000): # step_range = range(96,96*22)
@@ -358,52 +357,63 @@ def MC_select_and_exp(dfin,df,varns):
     if os.path.exists('Routput.csv'):
         os.remove('Routput.csv')
     os.system('Rscript ./trial3-R.R')
-    Rout = pd.read_csv('Routput.csv')
-    Rdf = pd.DataFrame({'pre_t1':Rout['time'][0],
-                        'real_t1':Rout['time'][1],
-                        'pre_t2':Rout['time'][2],
-                        'real_t2':Rout['time'][3],
-                        'pre_t3':Rout['time'][4],
-                        'real_t3':Rout['time'][5],
-                        'pre_profit1':Rout['profit'][0],
-                        'real_profit1':Rout['profit'][1],
-                        'pre_profit2':Rout['profit'][2],
-                        'real_profit2':Rout['profit'][3],
-                        'pre_profit3':Rout['profit'][4],
-                        'real_profit3':Rout['profit'][5],
-                        'all_bat_p':Rout['profit'][6],
-                        'no_bat_p':Rout['profit'][7],
-                        'cut_top2':Rout['profit'][8],
-                        'cut_top3':Rout['profit'][9]},index=[outdate])
-    os.remove('out.csv')
-    os.remove('Routput.csv')
+    if os.path.exists('Routput.csv'):
+        Rout = pd.read_csv('Routput.csv')
+        Rdf = pd.DataFrame({'pre_t1':Rout['time'][0],
+                            'real_t1':Rout['time'][1],
+                            'pre_t2':Rout['time'][2],
+                            'real_t2':Rout['time'][3],
+                            'pre_t3':Rout['time'][4],
+                            'real_t3':Rout['time'][5],
+                            'pre_profit1':Rout['profit'][0],
+                            'real_profit1':Rout['profit'][1],
+                            'pre_profit2':Rout['profit'][2],
+                            'real_profit2':Rout['profit'][3],
+                            'pre_profit3':Rout['profit'][4],
+                            'real_profit3':Rout['profit'][5],
+                            'all_bat_p':Rout['profit'][6],
+                            'no_bat_p':Rout['profit'][7],
+                            'cut_top2':Rout['profit'][8],
+                            'cut_top3':Rout['profit'][9]},index=[outdate])
+
+    else:
+        return 'error'
+    try:
+        os.remove('out.csv')
+    except:
+        pass
+    try:
+        os.remove('Routput.csv')
+    except:
+        pass
     return Rdf
 
-def MC_multi(dfin,df,varns,*result,rep=10):
-    ts = []
-    for i in range(rep):
-        t0 = time.time()
-        print('================================')
-        print(len(result[0])+1)
-        print(time.localtime())
-        print('================================')
-        result[0].append(MC_select_and_exp(dfin,df,varns))
-        print('Writing...')
-        with open('./save.pickle','wb') as f:
-            pickle.dump(result[0],f)
-        ts.append((time.time()-t0)/60)
-        print('Finished. Mean time:',np.mean(ts),'min')
+#def MC_multi(dfin,df,varns,*result,rep=10):
+#    ts = []
+#    for i in range(rep):
+#        t0 = time.time()
+#        print('================================')
+#        print(len(result[0])+1)
+#        print(time.localtime())
+#        print('================================')
+#        result[0].append(MC_select_and_exp(dfin,df,varns))
+#        print('Writing...')
+#        with open('./save.pickle','wb') as f:
+#            pickle.dump(result[0],f)
+#        ts.append((time.time()-t0)/60)
+#        print('Finished. Mean time:',np.mean(ts),'min')
 
-def result_stat(rst0):
-    rst = rst0.copy()
-    for i in range(len(rst)):
-        if rst[i]['real_profit2'].iloc[0]>rst[i]['real_profit3'].iloc[0]:
-            rst[i]['real_profit3'].iloc[0]=rst[i]['real_profit2'].iloc[0]
-        if rst[i]['pre_profit2'].iloc[0]>rst[i]['pre_profit3'].iloc[0]:
-            rst[i]['pre_profit3'].iloc[0]=rst[i]['pre_profit2'].iloc[0]
-        if rst[i]['cut_top2'].iloc[0]>rst[i]['cut_top3'].iloc[0]:
-            rst[i]['cut_top3'].iloc[0]=rst[i]['cut_top2'].iloc[0]
-    return pd.concat(rst).describe().T
+#def result_stat(rst0):
+#    rst = rst0.copy()
+#    rst = [i for i in rst if i is not 'error']
+#    for i in range(len(rst)):
+#        if rst[i]['real_profit2'].iloc[0]>rst[i]['real_profit3'].iloc[0]:
+#            rst[i]['real_profit3'].iloc[0]=rst[i]['real_profit2'].iloc[0]
+#        if rst[i]['pre_profit2'].iloc[0]>rst[i]['pre_profit3'].iloc[0]:
+#            rst[i]['pre_profit3'].iloc[0]=rst[i]['pre_profit2'].iloc[0]
+#        if rst[i]['cut_top2'].iloc[0]>rst[i]['cut_top3'].iloc[0]:
+#            rst[i]['cut_top3'].iloc[0]=rst[i]['cut_top2'].iloc[0]
+#    return pd.concat(rst).describe().T
 
 
 def find_multi_index(dfin,df,rep=100):
@@ -421,3 +431,85 @@ def find_multi_index(dfin,df,rep=100):
         sumout+=np.sum(outy.as_matrix())
         print(j)
     return sumout/sumin
+
+class Experiment(object):
+    def __init__(self,dfin,dfout,varns,result=[]):
+        self.dfin = dfin
+        self.dfout = dfout
+        self.varns = varns
+        self.result = result
+    def set_para(self,**para):
+        subsidy = para.get('subsidy',0.42 * (1-0.17) * (1-0.25)) # 补贴，减去增值税和所得税
+        buy_hour_price = para.get('buy_hour_price',{(0,6):0.513,(6,22):1.044,(22,24):0.513}) #
+        sell_price = para.get('sell_price',0.85) - subsidy #
+        buyp = []
+        sellp = []
+        for i in range(24):
+            for a,b in buy_hour_price:
+                if a<=i and i<b:
+                    buyp.extend([buy_hour_price[(a,b)]]*4)
+                    break
+            sellp.extend([sell_price]*4)
+        batmax = para.get('batmax',50) # 电池容量(kwh) 
+        bat_rate = para.get('bat_rate',0.2) #每小时充放电容量不能超过其最大容量的 20%
+        bat15min = -bat_rate * batmax /4
+        bat15max = bat_rate * batmax /4
+        batdepre = para.get('batdepre',0.3264)/2# 电池折旧成本／（kW·h）#http://cn.trustexporter.com/cp-shanbaony/o4282865.htm
+        batrateio = para.get('batrateio',0.85) # 电池充放电效率
+        no_improvement = para.get('no_improvement',1)# how much profit increase is condidered to be no improvement
+        maxit = para.get('maxit',3000) # max iteration of PSO
+        parnew ={
+                'subsidy':subsidy,
+                'buyp':'c('+str(buyp)[1:-2]+')', #这是R中的向量的格式
+                'sellp':'c('+str(sellp)[1:-2]+')', #这是R中的向量的格式
+                'batmax':batmax,
+                'bat15min':bat15min,
+                'bat15max':bat15max,
+                'batdepre':batdepre,
+                'batrateio':batrateio,
+                'no_improvement':no_improvement,
+                'maxit':maxit
+                }
+        self.Rpara = '''
+                # R script:
+                subsidy = @subsidy
+                buyp = @buyp
+                sellp = @sellp
+                batmax = @batmax
+                bat15min = @bat15min
+                bat15max = @bat15max
+                batdepre = @batdepre
+                batrateio = @batrateio
+                no_improvement = @no_improvement
+                control = list(maxit = @maxit, trace=F, REPORT=500)
+                '''
+        for i in parnew:
+            self.Rpara=self.Rpara.replace('@'+i,str(parnew[i]))
+        with open('R-para.R','w') as f:
+            f.write(self.Rpara)
+    def MC_multi(self,rep=100):
+        ts = []
+        for i in range(rep):
+            t0 = time.time()
+            print('================================')
+            print(len(self.result)+1) #显示现在有多少结果了
+            print(time.localtime()) #显示时间戳
+            print('================================')
+            self.result.append(MC_select_and_exp(self.dfin,self.dfout,self.varns))
+            print('Writing...')
+            with open('./save.pickle','wb') as f: #缓存到pickle文件，以防丢失
+                pickle.dump(self,f)
+            ts.append((time.time()-t0)/60)
+            print('Finished. Mean time:',np.mean(ts),'min')
+    def stat(self):
+        rst = self.result.copy()
+        rst = [i for i in rst if type(i) is not str]
+        for i in range(len(rst)):
+            if rst[i]['real_profit2'].iloc[0]>rst[i]['real_profit3'].iloc[0]:
+                rst[i]['real_profit3'].iloc[0]=rst[i]['real_profit2'].iloc[0]
+            if rst[i]['pre_profit2'].iloc[0]>rst[i]['pre_profit3'].iloc[0]:
+                rst[i]['pre_profit3'].iloc[0]=rst[i]['pre_profit2'].iloc[0]
+            if rst[i]['cut_top2'].iloc[0]>rst[i]['cut_top3'].iloc[0]:
+                rst[i]['cut_top3'].iloc[0]=rst[i]['cut_top2'].iloc[0]
+        self.stat_result = pd.concat(rst).describe().T
+        return self.stat_result

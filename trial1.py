@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jun 30 16:46:29 2017
+发电数据预测
 
-@author: Lyuxun Yang
 """
 
 import pandas as pd
 import numpy as np
 import datetime as dt
 
-from trial1_fun import * # the functions file
+from trial1_fun import * # 调用写好的function
 # run trial1_fun.py
 
 # read data ---------------

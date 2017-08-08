@@ -1,8 +1,11 @@
-# These are the functions for "trial5.R"
+# 被trial3.py调用的R code
+# 前面的部分是各种需要定义的函数，最后一部分是程序运行的主体，可从最后开始阅读
+
+#%% 需要安装的package：
 library(lubridate)
 library(pso)
 
-## PSO -----------------
+#%% 各种函数 -----------------
 
 # 适应度函数（越小越好） - output is the cost+punish
 # 德国模式：完全不允许电池、电网交互---------------
@@ -241,7 +244,8 @@ calc_profit3= function(real_iny, real_outy, batnow, buybtar){ #####USE temp to C
 }
 
 #################
-# calculation for "all bat" strategy:
+# calculation for "all bat" strategy: 
+# 电池优先策略
 calc_profit_all_bat = function(real_iny, real_outy){
   batnowreal = 0.4 * batmax
   Batreal = rep(NA, nx) 
@@ -273,6 +277,7 @@ calc_profit_no_bat = function(real_iny, real_outy){
   )
 }
 # calculation for top-bottom strategy:
+# 削峰填谷策略
 # (charge when price is low, and use bat when price is high)
 calc_tp2 = function(real_iny,real_outy){
   batnowreal = 0.4 * batmax
@@ -315,6 +320,7 @@ calc_tp2 = function(real_iny,real_outy){
       ifelse(deltabatall<0, deltabatall*mean(buyp), deltabatall*mean(sellp))
   )
 }
+# 另一种削峰填谷策略（可忽略）
 calc_tp3 = function(real_iny,real_outy){
   batnowreal = 0.4 * batmax
   Batreal = rep(NA, nx) 
@@ -357,42 +363,45 @@ calc_tp3 = function(real_iny,real_outy){
   )
 }
 
-# public variables:
-subsidy = 0.42 * (1-0.17) * (1-0.25) # 补贴，减去增值税和所得税
-buy = function(hour){
-  # 上海市电网夏季销售电价表（单一制分时电价用户）工商业及其他用电 http://www.sgcc.com.cn/dlfw/djzc/
-  return(ifelse(hour>=6 & hour<22, 1.044, 0.513))
-}
-sell = 0.85-subsidy # minus subsidy, because it always exists
-hours = sort(rep(0:23,4))
-buyp = buy(hours)
-sellp = rep(sell, 96)
-batmax = 10000 # 电池容量(kwh)
-punish = 1e10 # 过量惩罚系数
-bat15min = -0.2 * batmax /4 # 过量惩罚系数
-bat15max = 0.2 * batmax /4 # 每15分钟最大充电/放电值: 每小时充放电容量不能超过其最大容量的 20%
-batdepre = 0.1# 电池折旧成本／（kW·h）
-batrateio = 0.8 # 电池充放电效率
-no_improvement = 2 # how much profit increase is condidered to be no improvement
-control = list(maxit = 3000, trace=F, REPORT=500) # the control for psoptim()
+#旧的参数目录（已废弃）：
+#subsidy = 0.42 * (1-0.17) * (1-0.25) # 补贴，减去增值税和所得税
+#buy = function(hour){
+#  # 上海市电网夏季销售电价表（单一制分时电价用户）工商业及其他用电 http://www.sgcc.com.cn/dlfw/djzc/
+#  return(ifelse(hour>=6 & hour<22, 1.044, 0.513))
+#}
+#sell = 0.85-subsidy # minus subsidy, because it always exists
+#hours = sort(rep(0:23,4))
+#buyp = buy(hours)
+#sellp = rep(sell, 96)
+#batmax = 50 # 电池容量(kwh) 
+#bat15min = -0.2 * batmax /4 # 过量惩罚系数
+#bat15max = 0.2 * batmax /4 # 每15分钟最大充电/放电值: 每小时充放电容量不能超过其最大容量的 20%
+#batdepre = 0.3264/2# 电池折旧成本／（kW·h）#http://cn.trustexporter.com/cp-shanbaony/o4282865.htm
+#batrateio = 0.85 # 电池充放电效率
+#no_improvement = 1 # how much profit increase is condidered to be no improvement
+#control = list(maxit = 3000, trace=F, REPORT=500) # the control for psoptim()
 
-#%%
-# main program
-df = read.csv('out.csv')
+
+#%% main program 程序从这里执行-------------------------------------------------------------------------------------
+
+source('R-para.R') # 从另一个文件（python写好的）读入各个参数
+punish = 1e10 # 定义一个过量惩罚系数，用于保证PSO在限制条件内搜寻最优值
+
+df = read.csv('out.csv') #读入数据
 iny = df$iny
 outy = df$outyp
 real_iny = df$iny
 real_outy = df$outytrue
 subsidy_all = sum(real_iny) * subsidy
 nx=length(iny)
-result11 = PSOsolve1(iny,outy,real_iny,real_outy)
-result21 = PSOsolve2(iny,outy,real_iny,real_outy)
-result31 = PSOsolve3(iny,outy,real_iny,real_outy)
-outy = real_outy # suppose we know the real data
-result12 = PSOsolve1(iny,outy,real_iny,real_outy)
-result22 = PSOsolve2(iny,outy,real_iny,real_outy)
-result32 = PSOsolve3(iny,outy,real_iny,real_outy)
-#calc_tp3(real_iny,real_outy) ######################
+result11 = PSOsolve1(iny,outy,real_iny,real_outy) #模式1
+result21 = PSOsolve2(iny,outy,real_iny,real_outy) #模式2
+result31 = PSOsolve3(iny,outy,real_iny,real_outy) #模式3
+outy = real_outy # 将预测数据换成真实数据，影响后面的3个结果
+result12 = PSOsolve1(iny,outy,real_iny,real_outy) #模式1
+result22 = PSOsolve2(iny,outy,real_iny,real_outy) #模式2
+result32 = PSOsolve3(iny,outy,real_iny,real_outy) #模式3
+#calc_tp3(real_iny,real_outy) 
 output = data.frame(time = as.numeric(c(result11$time,result12$time,
                                         result21$time,result22$time,
                                         result31$time,result32$time,0,0,0,0),'s'), 
@@ -402,8 +411,8 @@ output = data.frame(time = as.numeric(c(result11$time,result12$time,
                      result22$realProfit,
                      result31$realProfit,
                      result32$realProfit,
-                     calc_profit_all_bat(real_iny, real_outy),
-                     calc_profit_no_bat(real_iny, real_outy),
-                     calc_tp2(real_iny,real_outy),
-                     calc_tp3(real_iny,real_outy)))
-write.csv(output, 'Routput.csv')
+                     calc_profit_all_bat(real_iny, real_outy), #电池优先策略
+                     calc_profit_no_bat(real_iny, real_outy), #不用电池
+                     calc_tp2(real_iny,real_outy),  #削峰填谷
+                     calc_tp3(real_iny,real_outy))) 
+write.csv(output, 'Routput.csv') #写入输出文件
